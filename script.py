@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 from imblearn.over_sampling import SMOTE
-from PIL import Image
 import joblib
 
 ## skelarn -- preprocessing
@@ -24,6 +23,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, confusion_matrix
 
 os.makedirs('models', exist_ok=True)
+
+legacy_plots = ['without-imbalance.png', 'with-class-weights.png', 'with-SMOTE.png']
+for plot_file in legacy_plots:
+    if os.path.exists(plot_file):
+        os.remove(plot_file)
 
 ## --------------------- Data Preparation ---------------------------- ##
 
@@ -129,20 +133,10 @@ def train_model(X_train, y_train, plot_name='', class_weight=None):
     ## Using f1_score
     score_train = f1_score(y_train, y_pred_train)
     score_test = f1_score(y_test, y_pred_test)
+
+    cm = confusion_matrix(y_test, y_pred_test)
     
     clf_name = clf.__class__.__name__
-
-    ## Plot the confusion matrix 
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(confusion_matrix(y_test, y_pred_test), annot=True, cbar=False, fmt='.2f', cmap='Blues')
-    plt.title(f'{plot_name}')
-    plt.xticks(ticks=np.arange(2) + 0.5, labels=[False, True])
-    plt.yticks(ticks=np.arange(2) + 0.5, labels=[False, True])
-
-    ## Save the plot locally
-    plt.savefig(f'{plot_name}.png', bbox_inches='tight', dpi=300)
-    plt.close()
-
 
     ## Write scores to a file
     with open('metrics.txt', 'a') as f:
@@ -154,37 +148,33 @@ def train_model(X_train, y_train, plot_name='', class_weight=None):
 
     joblib.dump(clf, os.path.join(os.getcwd(), 'models', f'{clf_name}-{plot_name}.pkl'))
 
-    return True
+    return cm, clf_name
 
 
 ## 1. without considering the imabalancing data
-train_model(X_train=X_train_final, y_train=y_train, plot_name='without-imbalance', class_weight=None)
+conf_mats = []
+cm, clf_name = train_model(X_train=X_train_final, y_train=y_train, plot_name='without-imbalance', class_weight=None)
+conf_mats.append(('without-imbalance', cm))
 
 ## 2. with considering the imabalancing data using class_weights
-train_model(X_train=X_train_final, y_train=y_train, plot_name='with-class-weights', class_weight=dict_weights)
+cm, clf_name = train_model(X_train=X_train_final, y_train=y_train, plot_name='with-class-weights', class_weight=dict_weights)
+conf_mats.append(('with-class-weights', cm))
 
 ## 3. with considering the imabalancing data using oversampled data (SMOTE)
-train_model(X_train=X_train_resmapled, y_train=y_train_resampled, plot_name=f'with-SMOTE', class_weight=None)
+cm, clf_name = train_model(X_train=X_train_resmapled, y_train=y_train_resampled, plot_name=f'with-SMOTE', class_weight=None)
+conf_mats.append(('with-SMOTE', cm))
 
 
+## Combine all conf matrix in one figure
+fig, axes = plt.subplots(1, len(conf_mats), figsize=(15, 5))
 
-## Combine all conf matrix in one
-confusion_matrix_paths = [f'./without-imbalance.png', f'./with-class-weights.png', f'./with-SMOTE.png']
+for ax, (title, cm) in zip(axes, conf_mats):
+    sns.heatmap(cm, annot=True, cbar=False, fmt='d', cmap='Blues', ax=ax)
+    ax.set_title(title)
+    ax.set_xticks(ticks=np.arange(2) + 0.5, labels=[False, True])
+    ax.set_yticks(ticks=np.arange(2) + 0.5, labels=[False, True])
 
-## Load and plot each confusion matrix
-plt.figure(figsize=(15, 5))  # Adjust figure size as needed
-for i, path in enumerate(confusion_matrix_paths, 1):
-    img = Image.open(path)
-    plt.subplot(1, len(confusion_matrix_paths), i)
-    plt.imshow(img)
-    plt.axis('off')  # Disable axis for cleaner visualization
-
-
-## Save combined plot locally
 plt.suptitle(clf_name, fontsize=16)
 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-plt.savefig(f'conf_matrix.png', bbox_inches='tight', dpi=300)
-
-## Delete old image files
-for path in confusion_matrix_paths:
-    os.remove(path)
+plt.savefig('conf_matrix.png', bbox_inches='tight', dpi=300)
+plt.close(fig)

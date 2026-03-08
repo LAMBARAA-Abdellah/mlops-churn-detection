@@ -1,0 +1,105 @@
+name: CML Churn CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  train-and-report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install cml
+          pip install "dvc[s3]"
+          pip install dvc-gdrive
+
+      - name: Configure DVC remote from secrets (S3/GDrive)
+        env:
+          DVC_S3_BUCKET: ${{ secrets.DVC_S3_BUCKET }}
+          DVC_S3_REGION: ${{ secrets.DVC_S3_REGION }}
+          DVC_S3_ENDPOINTURL: ${{ secrets.DVC_S3_ENDPOINTURL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          DVC_GDRIVE_FOLDER_ID: ${{ secrets.DVC_GDRIVE_FOLDER_ID }}
+          DVC_GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.DVC_GDRIVE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$DVC_S3_BUCKET" ]; then
+            echo "Using DVC S3 remote"
+            dvc remote remove -f origin || true
+            dvc remote add -f -d origin "s3://$DVC_S3_BUCKET"
+            if [ -n "$DVC_S3_REGION" ]; then
+              dvc remote modify origin region "$DVC_S3_REGION"
+            fi
+            if [ -n "$DVC_S3_ENDPOINTURL" ]; then
+              dvc remote modify origin endpointurl "$DVC_S3_ENDPOINTURL"
+            fi
+          elif [ -n "$DVC_GDRIVE_FOLDER_ID" ]; then
+            echo "Using DVC GDrive remote"
+            dvc remote remove -f origin || true
+            dvc remote add -f -d origin "gdrive://$DVC_GDRIVE_FOLDER_ID"
+            if [ -n "$DVC_GDRIVE_SERVICE_ACCOUNT_JSON" ]; then
+              echo "$DVC_GDRIVE_SERVICE_ACCOUNT_JSON" > /tmp/dvc-gdrive-sa.json
+              dvc remote modify --local origin gdrive_service_account_json_file_path /tmp/dvc-gdrive-sa.json
+            fi
+          else
+            echo "No DVC remote secrets found. Running with local data only."
+          fi
+
+      - name: Run training pipeline (DVC if available)
+        run: |
+          if [ ! -f data/dataset.csv ] && [ -d .dvc ]; then
+            dvc pull || true
+          fi
+
+          if [ -f dvc.yaml ]; then
+            dvc repro
+          else
+            python script.py
+          fi
+
+      - name: Build CML report
+        run: |
+          echo "# TP4 - Churn Detection Report" > report.md
+          echo "" >> report.md
+          echo "## Metrics" >> report.md
+          echo '```' >> report.md
+          cat metrics.txt >> report.md
+          echo '```' >> report.md
+          echo "" >> report.md
+          if [ -f conf_matrix.png ]; then
+            echo "## Confusion Matrix" >> report.md
+            cml publish conf_matrix.png --md >> report.md
+          fi
+
+      - name: Comment report on PR
+        if: github.event_name == 'pull_request'
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cml comment create report.md
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: churn-artifacts
+          path: |
+            metrics.txt
+            conf_matrix.png
+            models/

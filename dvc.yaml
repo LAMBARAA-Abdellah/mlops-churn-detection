@@ -1,0 +1,10 @@
+stages:
+  train:
+    cmd: python script.py
+    deps:
+      - script.py
+      - data/dataset.csv
+    outs:
+      - metrics.txt
+      - conf_matrix.png
+      - models
