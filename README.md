@@ -1,67 +1,59 @@
-# TP4 — Customer Churn Detection (MLOps)
+# Abdellah LAMBARAA
 
-Ce TP entraîne un modèle de classification du churn client avec 3 stratégies de gestion du déséquilibre des classes :
-- sans correction du déséquilibre,
-- avec `class_weight`,
-- avec sur-échantillonnage `SMOTE`.
+Étudiant à l’ENSET Mohammedia, je travaille sur des projets Data & MLOps orientés industrialisation des modèles de machine learning.
 
-## Exécution
+Ce dépôt présente mon TP4 en MLOps, consacré à la détection du churn client avec une approche complète : préparation des données, entraînement, suivi des performances, versioning et automatisation CI/CD.
+
+## À propos de ce projet
+
+Le projet entraîne un modèle de classification binaire du churn en comparant trois stratégies de gestion du déséquilibre des classes :
+- entraînement standard,
+- entraînement avec pondération des classes (`class_weight`),
+- entraînement avec sur-échantillonnage (`SMOTE`).
+
+L’objectif est de produire un pipeline reproductible, traçable et prêt à être exécuté automatiquement via GitHub Actions.
+
+## Stack technique
+
+- Python (pandas, scikit-learn, imbalanced-learn, matplotlib, seaborn)
+- DVC pour la reproductibilité et le suivi des sorties
+- CML + GitHub Actions pour l’automatisation des runs et du reporting
+
+## Exécution locale
 
 ```bash
 python -m pip install -r requirements.txt
 python script.py
 ```
 
-## Résultats générés
+## Sorties générées
 
-- `metrics.txt` : F1-score train/validation pour les 3 approches.
-- `conf_matrix.png` : matrice de confusion combinée.
-- `models/*.pkl` : modèles entraînés et sauvegardés.
+- `metrics.txt` : scores d’évaluation des différentes stratégies
+- `conf_matrix.png` : visualisation consolidée des matrices de confusion
+- `models/` : modèles entraînés et sérialisés
 
-## Structure
+## Capture d’écran
 
-- `data/dataset.csv` : dataset source.
-- `script.py` : pipeline data prep + entraînement + évaluation.
-- `requirements.txt` : dépendances Python.
+![Matrice de confusion du projet](./conf_matrix.png)
 
-## DVC (optionnel)
+## Automatisation CI/CD
 
-```bash
-python -m pip install dvc[s3]
-dvc init
-```
+Le workflow GitHub Actions (`.github/workflows/cml-churn.yaml`) :
+- installe les dépendances,
+- exécute `dvc repro` (ou `python script.py` en fallback),
+- génère un rapport CML,
+- publie les artefacts du run.
 
-## GitHub Actions (CML + DVC)
+## Configuration des secrets (optionnel)
 
-Le workflow est prêt dans `.github/workflows/cml-churn.yaml`.
+Le pipeline peut utiliser un remote DVC selon deux modes :
 
-Ce qu'il fait automatiquement:
-- installe Python et les dépendances,
-- exécute `dvc repro` (stage `train` dans `dvc.yaml`),
-- génère un rapport CML avec `metrics.txt` et `conf_matrix.png`,
-- poste le rapport sur la PR,
-- archive les artefacts (`metrics.txt`, `conf_matrix.png`, `models/`).
+- **S3** : `DVC_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+  - optionnels : `DVC_S3_REGION`, `DVC_S3_ENDPOINTURL`, `AWS_SESSION_TOKEN`
+- **Google Drive** : `DVC_GDRIVE_FOLDER_ID`
+  - recommandé : `DVC_GDRIVE_SERVICE_ACCOUNT_JSON`
 
-Pour l'utiliser:
-1. push sur `main` ou ouvre une Pull Request,
-2. lance manuellement via **workflow_dispatch** si nécessaire.
+## Contact
 
-Note: `GITHUB_TOKEN` est fourni automatiquement par GitHub Actions pour publier le commentaire CML.
-
-### Secrets GitHub pour remote DVC (optionnel)
-
-Le workflow supporte 2 modes de remote DVC en CI:
-
-- **S3** (prioritaire si configuré):
-	- `DVC_S3_BUCKET` (ex: `my-dvc-bucket/path`)
-	- `DVC_S3_REGION` (optionnel)
-	- `DVC_S3_ENDPOINTURL` (optionnel, pour MinIO/S3 compatible)
-	- `AWS_ACCESS_KEY_ID`
-	- `AWS_SECRET_ACCESS_KEY`
-	- `AWS_SESSION_TOKEN` (optionnel)
-
-- **GDrive** (utilisé si S3 non défini):
-	- `DVC_GDRIVE_FOLDER_ID`
-	- `DVC_GDRIVE_SERVICE_ACCOUNT_JSON` (optionnel mais recommandé en CI)
-
-Si aucun secret remote n'est fourni, le workflow exécute simplement le pipeline avec les données locales du repo.
+**Abdellah LAMBARAA**  
+Étudiant — ENSET Mohammedia
